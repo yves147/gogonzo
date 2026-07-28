@@ -40,17 +40,6 @@ int main(void)
         }
     }
 
-    for (uint8_t x = 0; x < MAX_SIZE; x++)
-    {
-        for (uint8_t y = 0; y < MAX_SIZE; y++)
-        {
-            printf("[%2u][%2u] = %016llx %016llx\n", x, y,
-                   (unsigned long long)zobrist_table[x][y][0],
-                   (unsigned long long)zobrist_table[x][y][1]);
-        }
-    }
-    exit(0);
-
     while (1)
     {
         char line[128];
