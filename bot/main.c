@@ -35,10 +35,8 @@ int main(void)
     {
         for (uint8_t y = 0; y < MAX_SIZE; y++)
         {
-            for (uint8_t c = 0; c <= 1; c++)
-            {
-                zobrist_table[x][y][c] = xoshiro256ss_next(&seed);
-            }
+            zobrist_table[x][y][0] = xoshiro256ss_next(&seed);
+            zobrist_table[x][y][1] = xoshiro256ss_next(&seed);
         }
     }
 
@@ -100,7 +98,8 @@ int main(void)
         {
             break;
         }
-        else {
+        else
+        {
             printf("? command not found\n\n");
         }
     }
