@@ -1,0 +1,8 @@
+.claude/
+.venv/
+build/
+.cache/
+compile_commands.json
+*.o
+*.a
+PLAN.md

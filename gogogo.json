@@ -1,0 +1,5 @@
+{
+  "id": "gonzothegreat",
+  "build_command": "make -C bot clean release",
+  "run_command": "./bot/bot"
+}
