@@ -26,6 +26,8 @@ uint8_t KOMI;
 
 int main(void)
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     init_seed seed;
     splitmix64_init(&seed);
 
