@@ -13,17 +13,17 @@ typedef struct
 
 extern uint64_t splitmix64_state;
 
-static inline uint64_t splitmix64_next()
-{
-    uint64_t z = (splitmix64_state += 0x9e3779b97f4a7c15);
-    return splitmix64_mix(z);
-}
-
 inline uint64_t splitmix64_mix(uint64_t z)
 {
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
     z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
     return z ^ (z >> 31);
+}
+
+static inline uint64_t splitmix64_next()
+{
+    uint64_t z = (splitmix64_state += 0x9e3779b97f4a7c15);
+    return splitmix64_mix(z);
 }
 
 static inline uint64_t bit_length(uint64_t n)
