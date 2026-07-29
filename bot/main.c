@@ -1,5 +1,9 @@
 #define _POSIX_C_SOURCE 200809L
 
+#define GONZO_VERSION_MAJOR 0
+#define GONZO_VERSION_MINOR 1
+#define MAX_SIZE 13
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,17 +13,15 @@
 #include <string.h>
 
 #include "field.h"
+#include "history.h"
 
 #include "splitmix64.h"
 #include "xoshiro.h"
 
-#define GONZO_VERSION_MAJOR 0
-#define GONZO_VERSION_MINOR 1
-#define MAX_SIZE 13
-
 uint64_t splitmix64_state;
-
 uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2];
+
+history_hashset history;
 
 uint8_t SIZE;
 uint8_t KOMI;
