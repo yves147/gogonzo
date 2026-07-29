@@ -13,7 +13,7 @@ typedef struct
 
 extern uint64_t splitmix64_state;
 
-inline uint64_t splitmix64_mix(uint64_t z)
+static inline uint64_t splitmix64_mix(uint64_t z)
 {
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
     z = (z ^ (z >> 27)) * 0x94d049bb133111eb;

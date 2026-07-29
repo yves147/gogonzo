@@ -21,8 +21,6 @@
 uint64_t splitmix64_state;
 uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2];
 
-history_node history_main_branch;
-
 uint8_t SIZE;
 uint8_t KOMI;
 
