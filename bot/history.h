@@ -21,16 +21,16 @@
 // Man kann sehr konservativ bei einen 13x13 Spiel mit durschnittlich 400 Elementen im Bloom Filter rechnen (also 400 gespielten Zügen)
 // p = (1 - e ^ ((k * n) / m)) ^ k < 5% mit guten Design Parametern
 
-// n=400, m=4096, 512 byte, k=6 => p=0,76%
+// n=400, m=4096, 512 byte, k=6 => false hit p=0,76%
 typedef struct
 {
     uint64_t bloom[64]; // 512 byte
     dyn_array data;
     atomic_size_t *refcount; // != NULL solange data.data mit anderen branches geteilt ist
     bool cow;
-} history_filter;
+} history_t;
 
-static inline void history_init(history_filter *history)
+static inline void history_init(history_t *history)
 {
     memset(history->bloom, 0, sizeof(history->bloom));
     da_init(&history->data);
@@ -40,7 +40,7 @@ static inline void history_init(history_filter *history)
 
 // erzeugt in `child` einen neuen branch von `parent`; bloom wird kopiert (relativ billig)
 // CoW
-static inline void history_branch(history_filter *parent, history_filter *child)
+static inline void history_branch(history_t *parent, history_t *child)
 {
     memcpy(child->bloom, parent->bloom, sizeof(parent->bloom));
 
@@ -58,7 +58,7 @@ static inline void history_branch(history_filter *parent, history_filter *child)
     child->cow = true;
 }
 
-static inline void history_add(history_filter *history, uint64_t el)
+static inline void history_add(history_t *history, uint64_t el)
 {
     if (history->cow && atomic_load(history->refcount) > 1)
     {
@@ -88,7 +88,7 @@ static inline void history_add(history_filter *history, uint64_t el)
 
 // find out wether position already existed in this branch of history
 // for the positional superko rule of tromp taylor
-static inline bool history_find(history_filter *history, uint64_t el)
+static inline bool history_find(history_t *history, uint64_t el)
 {
     uint64_t h2 = splitmix64_mix(el);
     for (int i = 0; i < 6; i++)
@@ -108,7 +108,7 @@ static inline bool history_find(history_filter *history, uint64_t el)
     return da_has(&history->data, el);
 }
 
-static inline void history_clear(history_filter *history)
+static inline void history_clear(history_t *history)
 {
     if (history->refcount != NULL)
     {

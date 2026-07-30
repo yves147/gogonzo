@@ -11,35 +11,41 @@
 #include <pthread.h>
 #include <signal.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "field.h"
 #include "history.h"
 
 #include "splitmix64.h"
 #include "xoshiro.h"
+#include "zobrist.h"
 
-uint64_t splitmix64_state;
-uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2];
-
+// global settings
 uint8_t SIZE;
 uint8_t KOMI;
 
+// zobrist hashing
+uint64_t splitmix64_state;
+uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2]; // x y color
+uint64_t zobrist_pass_table[2];                // color
+
+// history main line
+history_t main_line;
+
 int main(void)
 {
+    // set type to line buffer
     setvbuf(stdout, NULL, _IOLBF, 0);
 
+    // initialize seeding & zobrist
     init_seed seed;
     splitmix64_init(&seed);
+    zobrist_init(&seed);
 
-    for (uint8_t x = 0; x < MAX_SIZE; x++)
-    {
-        for (uint8_t y = 0; y < MAX_SIZE; y++)
-        {
-            zobrist_table[x][y][0] = xoshiro256ss_next(&seed);
-            zobrist_table[x][y][1] = xoshiro256ss_next(&seed);
-        }
-    }
+    // initialize main line
+    history_init(&main_line);
 
+    // main loop
     while (1)
     {
         char line[128];
@@ -66,6 +72,12 @@ int main(void)
             printf("= %d.%d\n\n", GONZO_VERSION_MAJOR, GONZO_VERSION_MINOR);
             continue;
         }
+        else if (strcmp(command_buf, "clear_board") == 0)
+        {
+            history_clear(&main_line);
+            printf("= \n\n");
+            continue;
+        }
         else if (strncmp(command_buf, "boardsize", 9) == 0)
         {
             int size = atoi(arg1);
@@ -86,13 +98,34 @@ int main(void)
             if (fmod(fkomi, 1.0) != 0.5)
             {
                 printf("? komi does not end with .5\n\n");
-                break;
+                continue; // not really a reason to quit
             }
 
             // this is probably faster (only a compare score w == score b => w wins)
             KOMI = (uint8_t)fkomi;
             printf("= \n\n");
             continue;
+        }
+        else if (strncmp(command_buf, "play", 4) == 0)
+        {
+            char color = tolower(arg1[0]);
+            if (color != 'b' && color != 'w')
+            {
+                printf("? invalid color\n\n");
+                continue;
+            }
+
+            char x_char = tolower(arg2[0]);
+            int x = x_char - 'a';
+            if (x < 0)
+            {
+                printf("? invalid column (x)");
+                continue;
+            }
+
+            int y = atoi(arg2 + 1) - 1;
+            printf("? x %d y %d\n\n", x, y);
+            break;
         }
         else if (strcmp(command_buf, "quit") == 0)
         {

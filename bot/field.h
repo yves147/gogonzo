@@ -4,12 +4,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define BLACK 0
+#define WHITE 1
+#define PASS_MOVE 0
+
+typedef int16_t move;
 typedef int16_t score;
 
 typedef enum COLOR
 {
-    BLACK = 0,
-    WHITE = 1
+    black = BLACK,
+    white = WHITE
 } COLOR;
 
 typedef struct
