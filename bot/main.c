@@ -27,7 +27,6 @@ uint8_t KOMI;
 // zobrist hashing
 uint64_t splitmix64_state;
 uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2]; // x y color
-uint64_t zobrist_pass_table[2];                // color
 
 // history main line
 history_t main_line;

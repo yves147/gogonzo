@@ -2,8 +2,8 @@
 #define GONZO_HISTORY_H
 
 #define MAX_GAME_LENGTH 4096
+#define HISTORY_CHUNK_SIZE 8 // 64 byte pro Chunk, beste size
 
-#include <math.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -11,122 +11,102 @@
 #include <stdatomic.h>
 
 #include "splitmix64.h"
-#include "dynarray.h"
+#include "field.h"
+#include "bloom.h"
 
-// PLAN
-// die abfrage hier ist (sowie zz geplant) NUR für tromp taylor ko lookup wichtig
-// es ist sehr wahrscheinlich, dass die hashmap alleine hier schon zu viel arbeit macht, da man mit einer fehlerrate von 97%+ rechnen kann
-// also nutze ich einen Bloom Filter https://en.wikipedia.org/wiki/Bloom_filter
-// Rechnung:
-// Man kann sehr konservativ bei einen 13x13 Spiel mit durschnittlich 400 Elementen im Bloom Filter rechnen (also 400 gespielten Zügen)
-// p = (1 - e ^ ((k * n) / m)) ^ k < 5% mit guten Design Parametern
+typedef struct history_chunk
+{
+    struct history_chunk *parent;
+    atomic_size_t ref_count;
+    uint16_t len;
+    uint64_t hashes[HISTORY_CHUNK_SIZE];
+} history_chunk_t;
 
-// n=400, m=4096, 512 byte, k=6 => false hit p=0,76%
 typedef struct
 {
-    uint64_t bloom[64]; // 512 byte
-    dyn_array data;
-    atomic_size_t *refcount; // != NULL solange data.data mit anderen branches geteilt ist
-    bool cow;
+    uint64_t bloom[64];    // 512 byte
+    history_chunk_t *tail;
+    field board;
 } history_t;
 
 static inline void history_init(history_t *history)
 {
     memset(history->bloom, 0, sizeof(history->bloom));
-    da_init(&history->data);
-    history->refcount = NULL;
-    history->cow = false;
+    history->tail = NULL;
+
+    memset(&history->board, 0, sizeof(history->board));
 }
 
-// erzeugt in `child` einen neuen branch von `parent`; bloom wird kopiert (relativ billig)
-// CoW
 static inline void history_branch(history_t *parent, history_t *child)
 {
     memcpy(child->bloom, parent->bloom, sizeof(parent->bloom));
+    child->board = parent->board;
 
-    if (parent->refcount == NULL)
+    child->tail = parent->tail;
+    if (parent->tail != NULL)
     {
-        parent->refcount = malloc(sizeof(atomic_size_t));
-        atomic_init(parent->refcount, 1);
-        parent->cow = true;
+        atomic_fetch_add(&parent->tail->ref_count, 1);
     }
-
-    atomic_fetch_add(parent->refcount, 1);
-
-    child->data = parent->data;
-    child->refcount = parent->refcount;
-    child->cow = true;
 }
 
 static inline void history_add(history_t *history, uint64_t el)
 {
-    if (history->cow && atomic_load(history->refcount) > 1)
+    if (history->tail == NULL || history->tail->len == HISTORY_CHUNK_SIZE || atomic_load(&history->tail->ref_count) > 1)
     {
-        dyn_array copy;
-        da_alloc_exact(&copy, history->data.cap ? history->data.cap : 4);
-        memcpy(copy.data, history->data.data, history->data.len * sizeof(uint64_t));
-        copy.len = history->data.len;
-
-        atomic_fetch_sub(history->refcount, 1);
-
-        history->data = copy;
-        history->refcount = NULL;
-        history->cow = false;
+        history_chunk_t *chunk = malloc(sizeof(history_chunk_t));
+        chunk->parent = history->tail;
+        chunk->len = 0;
+        atomic_init(&chunk->ref_count, 1);
+        history->tail = chunk;
     }
 
-    uint64_t h2 = splitmix64_mix(el);
-    for (int i = 0; i < 6; i++)
-    {
-        uint64_t idx = (el + i * h2) & 0xFFF;
-        uint64_t word_index = idx & 0x3F;
-        uint64_t bit_index = (idx >> 6) & 0x3F;
-        history->bloom[word_index] |= 1ULL << bit_index;
-    }
-
-    da_push(&history->data, el);
+    history->tail->hashes[history->tail->len++] = el;
+    bloom_add(history->bloom, el);
 }
 
 // find out wether position already existed in this branch of history
 // for the positional superko rule of tromp taylor
 static inline bool history_find(history_t *history, uint64_t el)
 {
-    uint64_t h2 = splitmix64_mix(el);
-    for (int i = 0; i < 6; i++)
+    if (!bloom_maybe_has(history->bloom, el))
     {
-        uint64_t idx = (el + i * h2) & 0xFFF;
-        uint64_t word_index = idx & 0x3F;
-        uint64_t bit_index = (idx >> 6) & 0x3F;
-
-        if ((history->bloom[word_index] & (1ULL << bit_index)) == 0)
-        {
-            return false;
-        }
+        return false;
     }
 
     // bloom filter gibt uns ein ja
     // jetzt müssen wir verifizieren, dass es sich nicht um ein false positive handelt
-    return da_has(&history->data, el);
+    for (history_chunk_t *c = history->tail; c != NULL; c = c->parent)
+    {
+        for (int i = c->len - 1; i >= 0; i--)
+        {
+            if (c->hashes[i] == el)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 static inline void history_clear(history_t *history)
 {
-    if (history->refcount != NULL)
+    history_chunk_t *cur = history->tail;
+    while (cur != NULL)
     {
-        if (atomic_fetch_sub(history->refcount, 1) == 1)
+        history_chunk_t *next = cur->parent;
+        if (atomic_fetch_sub(&cur->ref_count, 1) != 1)
         {
-            da_free(&history->data);
-            free(history->refcount);
+            break;
         }
-    }
-    else
-    {
-        da_free(&history->data);
+        free(cur);
+        cur = next;
     }
 
     memset(history->bloom, 0, sizeof(history->bloom));
-    da_init(&history->data);
-    history->refcount = NULL;
-    history->cow = false;
+    history->tail = NULL;
+
+    memset(&history->board, 0, sizeof(history->board));
 }
 
 #endif

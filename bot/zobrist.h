@@ -7,7 +7,6 @@
 #include "xoshiro.h"
 
 extern uint64_t zobrist_table[MAX_SIZE][MAX_SIZE][2];
-extern uint64_t zobrist_pass_table[2];
 
 static inline void zobrist_init(init_seed *seed)
 {
@@ -19,19 +18,11 @@ static inline void zobrist_init(init_seed *seed)
             zobrist_table[x][y][1] = xoshiro256ss_next(seed);
         }
     }
-
-    zobrist_pass_table[0] = xoshiro256ss_next(seed);
-    zobrist_pass_table[1] = xoshiro256ss_next(seed);
 }
 
 static inline uint64_t zobrist_move(uint64_t input, uint8_t x, uint8_t y, uint8_t color)
 {
     return input ^ zobrist_table[x][y][color];
-}
-
-static inline uint64_t zobrist_pass(uint64_t input, uint8_t color)
-{
-    return input ^ zobrist_pass_table[color];
 }
 
 #endif

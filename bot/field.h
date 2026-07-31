@@ -26,7 +26,7 @@ typedef struct
 {
     matrix black; // 24
     matrix white; // 24
-} field;
+} field; // 48 byte
 
 uint8_t matrix_at(const matrix *input, uint8_t x, uint8_t y, uint8_t size)
 {
